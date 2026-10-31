@@ -78,3 +78,4 @@ def stream_to_google_sheet(df, metrics, title="NIFTY Live Option Chain", workshe
     # Batch update from cell A1
     ws.update(range_name=f"A1", values=full_grid)
     return True
+
