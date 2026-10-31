@@ -4,4 +4,4 @@ pandas>=2.0
 openpyxl>=3.1
 python-dotenv>=1.0
 pyotp>=2.9
-
+xlwings>=0.35.0

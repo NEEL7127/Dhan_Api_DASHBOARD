@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import secrets_store, dhan_client, transform, excel_export
+import secrets_store, dhan_client, transform, excel_export, live_excel
 from config import CRED_FIELDS
 
 st.set_page_config(page_title="NIFTY Data Tracker", layout="wide")
@@ -57,8 +57,9 @@ if source == "Option Chain (NIFTY)":
                 "PE Volume","PE IV","PE Delta","PE Theta","PE Buildup"]
     chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
     refresh = st.sidebar.checkbox("Auto-refresh (5s)", value=False)
+    live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel", value=False)
 
-    @st.fragment(run_every=("5s" if refresh else None))
+    @st.fragment(run_every=("5s" if refresh or live_stream else None))
     def render():
         try:
             chain = dhan_client.get_option_chain(expiry)
@@ -75,6 +76,15 @@ if source == "Option Chain (NIFTY)":
         pct_cols = [c for c in view.columns if "Chg%" in c]
         fmt = {c: "{:.2%}" for c in pct_cols}
         st.dataframe(view.style.format(fmt, precision=2), use_container_width=True, height=600)
+
+        # Stream to open Excel if checked
+        if live_stream:
+            try:
+                live_excel.stream_to_excel(view, m, title=f"NIFTY Option Chain ({expiry})", sheet_name="Option Chain")
+                st.sidebar.success("🟢 Excel Live Linked")
+            except Exception as ex:
+                st.sidebar.warning(f"Excel Live Link note: {ex}")
+
         st.download_button("⬇ Download Excel",
             data=excel_export.to_excel_bytes(view, m),
             file_name=f"nifty_chain_{expiry}.xlsx",
@@ -93,8 +103,9 @@ else:  # source == "Nifty 50 Stocks"
     all_cols = ["Symbol", "LTP", "Chg%", "Open", "High", "Low", "Volume"]
     chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
     refresh = st.sidebar.checkbox("Auto-refresh (5s)", value=False)
+    live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel", value=False)
 
-    @st.fragment(run_every=("5s" if refresh else None))
+    @st.fragment(run_every=("5s" if refresh or live_stream else None))
     def render_stocks():
         try:
             q = dhan_client.get_quotes(list(sym_to_id.values()))
@@ -108,6 +119,15 @@ else:  # source == "Nifty 50 Stocks"
         pct = {c: "{:.2%}" for c in view.columns if c == "Chg%"}
         st.dataframe(view.style.format(pct, precision=2),
                      use_container_width=True, height=600)
+
+        # Stream to open Excel if checked
+        if live_stream:
+            try:
+                live_excel.stream_to_excel(view, {"underlying": "Nifty 50 Stocks"}, title="Nifty 50 Live Stocks", sheet_name="Nifty 50 Stocks")
+                st.sidebar.success("🟢 Excel Live Linked")
+            except Exception as ex:
+                st.sidebar.warning(f"Excel Live Link note: {ex}")
+
         st.download_button("⬇ Download Excel",
             data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
                                              title="Nifty 50 Stocks"),
