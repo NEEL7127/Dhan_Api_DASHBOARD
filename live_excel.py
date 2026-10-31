@@ -1,52 +1,78 @@
+import os
+import openpyxl
 import xlwings as xw
 
-_wb_cache = {}
+WORKBOOK_NAME = "Live_Nifty_Tracker.xlsx"
+WORKBOOK_PATH = os.path.abspath(WORKBOOK_NAME)
 
-def get_or_create_sheet(sheet_name="Live Data"):
-    """
-    Connect to an active Excel workbook or create a new one.
-    Returns the target worksheet.
-    """
-    app = None
-    wb = None
-    try:
-        # Check if Excel is already running
-        if xw.apps.count > 0:
-            app = xw.apps.active
-            if len(app.books) > 0:
-                wb = app.books.active
-            else:
-                wb = app.books.add()
-        else:
-            app = xw.App(visible=True)
-            wb = app.books.add()
-    except Exception:
-        app = xw.App(visible=True)
-        wb = app.books.add()
+_app_instance = None
+_wb_instance = None
 
-    # Find or add the target sheet
+def _ensure_workbook_file():
+    """Ensure the physical workbook file exists with initial sheets."""
+    if not os.path.exists(WORKBOOK_PATH):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Option Chain"
+        wb.create_sheet(title="Nifty 50 Stocks")
+        wb.save(WORKBOOK_PATH)
+
+def get_or_create_sheet(sheet_name="Option Chain"):
+    """
+    Connect to Live_Nifty_Tracker.xlsx or launch Excel and open it.
+    Reuses persistent app and workbook handles across Streamlit reruns.
+    """
+    global _app_instance, _wb_instance
+    _ensure_workbook_file()
+
+    need_connect = True
+    if _wb_instance is not None and _app_instance is not None:
+        try:
+            _ = _wb_instance.name
+            need_connect = False
+        except Exception:
+            _app_instance = None
+            _wb_instance = None
+            need_connect = True
+
+    if need_connect:
+        for app in xw.apps:
+            for b in app.books:
+                if b.name.lower() == WORKBOOK_NAME.lower():
+                    _app_instance = app
+                    _wb_instance = b
+                    need_connect = False
+                    break
+            if not need_connect:
+                break
+
+    if need_connect:
+        _app_instance = xw.App(visible=True, add_book=False)
+        _wb_instance = _app_instance.books.open(WORKBOOK_PATH)
+
     try:
-        sheet = wb.sheets[sheet_name]
+        sheet = _wb_instance.sheets[sheet_name]
     except Exception:
-        sheet = wb.sheets.add(sheet_name)
-    
+        sheet = _wb_instance.sheets.add(sheet_name)
+
     return sheet
 
-def stream_to_excel(df, metrics, title="NIFTY Live Tracker", sheet_name="Live Data"):
+def stream_to_excel(df, metrics, title="NIFTY Live Tracker", sheet_name="Option Chain"):
     """
-    Stream a pandas DataFrame and summary metrics into an open Excel worksheet in real time.
+    Stream a pandas DataFrame and headline metrics into Live_Nifty_Tracker.xlsx in real-time.
+    Also calls book.save() so both the live open Excel screen and the file stay synchronized.
     """
     sheet = get_or_create_sheet(sheet_name)
-    
+
     # 1. Update Header & Summary Metrics at the top
     sheet.range("A1").value = title
     sheet.range("A1").font.bold = True
     sheet.range("A1").font.size = 14
-    
+
     underlying = metrics.get("underlying", "")
     atm = metrics.get("atm", "")
     pcr = round(metrics.get("pcr_overall", 0), 2)
-    
+
     sheet.range("A2").value = f"Underlying LTP: {underlying}"
     if atm:
         sheet.range("A3").value = f"ATM: {atm}   PCR: {pcr}"
@@ -72,5 +98,11 @@ def stream_to_excel(df, metrics, title="NIFTY Live Tracker", sheet_name="Live Da
         if "Chg%" in c:
             pct_range = sheet.range((start_row + 1, j), (start_row + len(export_df), j))
             pct_range.number_format = "0.00%"
+
+    # 5. Save workbook so disk file and live view are in sync
+    try:
+        sheet.book.save()
+    except Exception:
+        pass
 
     return True
