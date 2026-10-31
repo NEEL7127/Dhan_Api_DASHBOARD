@@ -1,61 +1,27 @@
-# NIFTY Data Tracker — Dhan API
+# NIFTY 50 Option Chain & Stocks Tracker (DhanHQ)
 
-A Streamlit dashboard that fetches NIFTY 50 Option Chain data (and optionally
-the 50 constituent stocks) from the Dhan API, displays it with filters and
-metrics, and exports to Excel.
+Live NIFTY 50 option chain and stock data from the DhanHQ v2 API, shown in a
+Streamlit dashboard with selectable fields and one-click Excel export. Read-only
+market data — it never places orders.
 
-**Read-only. No orders, ever.**
+## Requirements
+- Windows, Python 3.12 (python.org — tick "Add python.exe to PATH")
+- A DhanHQ account with an ACTIVE Data API plan (Rs.499 + tax / month)
+- Your Dhan Client ID and Access Token
 
-## Prerequisites
+## Run (Windows)
+1. Install Python 3.12 (tick "Add python.exe to PATH").
+2. Double-click **start.bat**. The first run installs everything (~1 min).
+3. When the browser opens:
+   - Go to **Settings**, enter your **Client ID** and **Access Token**
+     (API Key / Secret optional), click **Save**, then **Test connection**
+     (should say OK).
+4. Go to **Dashboard** → choose Data Source (Option Chain or Nifty 50 Stocks),
+   pick expiry / fields → view → **Download Excel**.
 
-- **Python 3.12** (add to PATH during install)
-- **Dhan Data API plan (₹499 + tax/month)** must be active
-- A valid **Dhan Access Token** (24-hr) or **TOTP secret + PIN** for auto-refresh
-
-## Setup
-
-```bash
-# 1. Create virtual environment
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# 2. Install packages
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-
-# 3. Set credentials (pick one):
-#    Option A: Copy .env.example -> .env, fill in your values
-#    Option B: Run the app and use the Settings page
-```
-
-## Run
-
-```bash
-streamlit run app.py
-```
-
-Opens `http://localhost:8501` in your browser.
-
-## Usage
-
-1. Open the app → **Settings** → enter Client ID + (TOTP secret + PIN) or Access Token → **Save** → **Test connection** (should say OK).
-2. Go to **Dashboard** → pick expiry/fields → view the option chain → **Download Excel**.
-
-## Daily Token
-
-- **With TOTP secret + PIN:** token auto-refreshes, nothing to do.
-- **Without:** paste a fresh 24-hr token in Settings each day (web.dhan.co → My Profile → Access DhanHQ APIs).
-
-## Files
-
-| File | Purpose |
-|---|---|
-| `app.py` | Streamlit UI: Dashboard + Settings pages |
-| `config.py` | Non-secret constants (NIFTY=13/IDX_I, URLs) |
-| `secrets_store.py` | Read/write dhan_secrets.json |
-| `auth.py` | Token: manual OR TOTP auto-mint |
-| `dhan_client.py` | API calls: expiries, option chain, quotes + rate-limit |
-| `transform.py` | Raw JSON → tidy table; compute %chg, PCR, Buildup, ATM |
-| `excel_export.py` | Build .xlsx from selected columns |
-| `instruments.py` | (Dataset A) scrip-master → symbol:id map |
-
+## Notes
+- Each user needs their OWN Dhan credentials — none are stored in this repo.
+- The access token expires every 24 hours; paste a fresh one in Settings
+  (web.dhan.co → My Profile → Access DhanHQ APIs).
+- Credentials are saved locally in `dhan_secrets.json` (git-ignored). Keep it private.
+- "Test connection" failing with valid keys usually means the Data API plan isn't active.

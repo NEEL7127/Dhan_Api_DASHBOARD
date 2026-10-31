@@ -1,6 +1,6 @@
 .env
 dhan_secrets.json
+.venv/
 __pycache__/
 *.xlsx
-.venv/
-
+nifty50_ids.json
