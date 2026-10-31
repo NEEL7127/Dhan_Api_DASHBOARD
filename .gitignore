@@ -1,0 +1,6 @@
+.env
+dhan_secrets.json
+__pycache__/
+*.xlsx
+.venv/
+
