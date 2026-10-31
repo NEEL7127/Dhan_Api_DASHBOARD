@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import secrets_store, dhan_client, transform, excel_export, live_excel
+import secrets_store, dhan_client, transform, excel_export, live_excel, live_google_sheets
 from config import CRED_FIELDS
 
 st.set_page_config(page_title="NIFTY Data Tracker", layout="wide")
@@ -58,8 +58,9 @@ if source == "Option Chain (NIFTY)":
     chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
     refresh = st.sidebar.checkbox("Auto-refresh (3s)", value=False)
     live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel (3s)", value=False)
+    live_gsheets = st.sidebar.checkbox("🟢 Live Stream to Google Sheets (3s)", value=False)
 
-    @st.fragment(run_every=("3s" if refresh or live_stream else None))
+    @st.fragment(run_every=("3s" if (refresh or live_stream or live_gsheets) else None))
     def render():
         try:
             chain = dhan_client.get_option_chain(expiry)
@@ -85,6 +86,14 @@ if source == "Option Chain (NIFTY)":
             except Exception as ex:
                 st.sidebar.warning(f"Excel Live Link note: {ex}")
 
+        # Stream to Google Sheets if checked
+        if live_gsheets:
+            try:
+                live_google_sheets.stream_to_google_sheet(view, m, title=f"NIFTY Option Chain ({expiry})", worksheet_name="Option Chain")
+                st.sidebar.success("🟢 Google Sheets Live Linked")
+            except Exception as ex:
+                st.sidebar.warning(f"Google Sheets note: {ex}")
+
         st.download_button("⬇ Download Excel",
             data=excel_export.to_excel_bytes(view, m),
             file_name=f"nifty_chain_{expiry}.xlsx",
@@ -104,8 +113,9 @@ else:  # source == "Nifty 50 Stocks"
     chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
     refresh = st.sidebar.checkbox("Auto-refresh (3s)", value=False)
     live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel (3s)", value=False)
+    live_gsheets = st.sidebar.checkbox("🟢 Live Stream to Google Sheets (3s)", value=False)
 
-    @st.fragment(run_every=("3s" if refresh or live_stream else None))
+    @st.fragment(run_every=("3s" if (refresh or live_stream or live_gsheets) else None))
     def render_stocks():
         try:
             q = dhan_client.get_quotes(list(sym_to_id.values()))
@@ -127,6 +137,14 @@ else:  # source == "Nifty 50 Stocks"
                 st.sidebar.success("🟢 Excel Live Linked")
             except Exception as ex:
                 st.sidebar.warning(f"Excel Live Link note: {ex}")
+
+        # Stream to Google Sheets if checked
+        if live_gsheets:
+            try:
+                live_google_sheets.stream_to_google_sheet(view, {"underlying": "Nifty 50 Stocks"}, title="Nifty 50 Live Stocks", worksheet_name="Nifty 50 Stocks")
+                st.sidebar.success("🟢 Google Sheets Live Linked")
+            except Exception as ex:
+                st.sidebar.warning(f"Google Sheets note: {ex}")
 
         st.download_button("⬇ Download Excel",
             data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
