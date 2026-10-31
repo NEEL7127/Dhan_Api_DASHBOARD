@@ -17,3 +17,4 @@ if not exist ".venv\Scripts\python.exe" (
 echo Starting NIFTY tracker... (a browser tab will open)
 .venv\Scripts\python -m streamlit run app.py
 pause
+
