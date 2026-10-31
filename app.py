@@ -56,10 +56,10 @@ if source == "Option Chain (NIFTY)":
                 "CE Chg%","CE LTP","Strike","PCR","PE LTP","PE Chg%","PE OI",
                 "PE Volume","PE IV","PE Delta","PE Theta","PE Buildup"]
     chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
-    refresh = st.sidebar.checkbox("Auto-refresh (5s)", value=False)
-    live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel", value=False)
+    refresh = st.sidebar.checkbox("Auto-refresh (3s)", value=False)
+    live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel (3s)", value=False)
 
-    @st.fragment(run_every=("5s" if refresh or live_stream else None))
+    @st.fragment(run_every=("3s" if refresh or live_stream else None))
     def render():
         try:
             chain = dhan_client.get_option_chain(expiry)
@@ -102,10 +102,10 @@ else:  # source == "Nifty 50 Stocks"
 
     all_cols = ["Symbol", "LTP", "Chg%", "Open", "High", "Low", "Volume"]
     chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
-    refresh = st.sidebar.checkbox("Auto-refresh (5s)", value=False)
-    live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel", value=False)
+    refresh = st.sidebar.checkbox("Auto-refresh (3s)", value=False)
+    live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel (3s)", value=False)
 
-    @st.fragment(run_every=("5s" if refresh or live_stream else None))
+    @st.fragment(run_every=("3s" if refresh or live_stream else None))
     def render_stocks():
         try:
             q = dhan_client.get_quotes(list(sym_to_id.values()))
