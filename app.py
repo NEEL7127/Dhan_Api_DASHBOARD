@@ -81,7 +81,37 @@ if source == "Option Chain (NIFTY)":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     render()
 
-else:
-    st.info("Nifty 50 Stocks tab — Phase 7. Build instruments.py (symbol→id) first, "
-            "then call dhan_client.get_quotes(ids) and transform.build_stock_table(...).")
+else:  # source == "Nifty 50 Stocks"
+    import instruments
+    try:
+        symbols = instruments.fetch_nifty50_symbols()
+        sym_to_id = instruments.build_id_map(symbols)
+        id_to_sym = {v: k for k, v in sym_to_id.items()}
+    except Exception as e:
+        st.error(f"Could not load Nifty 50 list / ids: {e}"); st.stop()
+
+    all_cols = ["Symbol", "LTP", "Chg%", "Open", "High", "Low", "Volume"]
+    chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
+    refresh = st.sidebar.checkbox("Auto-refresh (5s)", value=False)
+
+    @st.fragment(run_every=("5s" if refresh else None))
+    def render_stocks():
+        try:
+            q = dhan_client.get_quotes(list(sym_to_id.values()))
+            df = transform.build_stock_table(q, id_to_sym)
+        except Exception as e:
+            st.error(f"Quote fetch failed: {e}"); return
+        up = int((df["Chg%"] > 0).sum()); down = int((df["Chg%"] < 0).sum())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Stocks", len(df)); c2.metric("Advancing", up); c3.metric("Declining", down)
+        view = df[[c for c in chosen if c in df.columns]]
+        pct = {c: "{:.2%}" for c in view.columns if c == "Chg%"}
+        st.dataframe(view.style.format(pct, precision=2),
+                     use_container_width=True, height=600)
+        st.download_button("⬇ Download Excel",
+            data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
+                                             title="Nifty 50 Stocks"),
+            file_name="nifty50_stocks.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    render_stocks()
 
