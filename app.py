@@ -94,10 +94,18 @@ if source == "Option Chain (NIFTY)":
             except Exception as ex:
                 st.sidebar.warning(f"Google Sheets note: {ex}")
 
-        st.download_button("⬇ Download Excel",
-            data=excel_export.to_excel_bytes(view, m),
-            file_name=f"nifty_chain_{expiry}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button("⬇ Download Excel (.xlsx)",
+                data=excel_export.to_excel_bytes(view, m),
+                file_name=f"nifty_chain_{expiry}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        with col_dl2:
+            st.download_button("🌐 Download for Google Sheets (.csv)",
+                data=view.to_csv(index=False).encode("utf-8"),
+                file_name=f"nifty_chain_{expiry}_gsheets.csv",
+                mime="text/csv",
+                help="Download formatted CSV to import directly into Google Sheets (File > Import)")
     render()
 
 else:  # source == "Nifty 50 Stocks"
@@ -146,10 +154,18 @@ else:  # source == "Nifty 50 Stocks"
             except Exception as ex:
                 st.sidebar.warning(f"Google Sheets note: {ex}")
 
-        st.download_button("⬇ Download Excel",
-            data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
-                                             title="Nifty 50 Stocks"),
-            file_name="nifty50_stocks.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button("⬇ Download Excel (.xlsx)",
+                data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
+                                                 title="Nifty 50 Stocks"),
+                file_name="nifty50_stocks.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        with col_dl2:
+            st.download_button("🌐 Download for Google Sheets (.csv)",
+                data=view.to_csv(index=False).encode("utf-8"),
+                file_name="nifty50_stocks_gsheets.csv",
+                mime="text/csv",
+                help="Download formatted CSV to import directly into Google Sheets (File > Import)")
     render_stocks()
 
