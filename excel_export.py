@@ -30,3 +30,19 @@ def to_excel_bytes(df, metrics, title="NIFTY Option Chain"):
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
     return buf.getvalue()
 
+
+def to_excel_raw_bytes(df, sheet_name="RawData"):
+    """Faithful dump: header row + values only. No title block, no number formats."""
+    wb = Workbook(); ws = wb.active; ws.title = sheet_name
+    cols = [c for c in df.columns if not c.startswith("_")]
+    for j, c in enumerate(cols, start=1):
+        ws.cell(row=1, column=j, value=c)
+    for i, (_, row) in enumerate(df.iterrows(), start=2):
+        for j, c in enumerate(cols, start=1):
+            v = row[c]
+            if hasattr(v, "item"):   # numpy -> native python
+                v = v.item()
+            ws.cell(row=i, column=j, value=v)
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf.getvalue()
+

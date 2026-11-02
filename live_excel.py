@@ -57,52 +57,49 @@ def get_or_create_sheet(sheet_name="Option Chain"):
 
     return sheet
 
-def stream_to_excel(df, metrics, title="NIFTY Live Tracker", sheet_name="Option Chain"):
-    """
-    Stream a pandas DataFrame and headline metrics into Live_Nifty_Tracker.xlsx in real-time.
-    Also calls book.save() so both the live open Excel screen and the file stay synchronized.
-    """
+# --- module state (persists across Streamlit reruns); keyed per sheet ---
+_layout = {}          # sheet_name -> {"cols": [...], "nrows": int}
+_tick = {"n": 0}
+
+def stream_to_excel(df, metrics, live_cols=None, title="NIFTY Live Tracker",
+                    sheet_name="Option Chain", save_every=20):
     sheet = get_or_create_sheet(sheet_name)
-
-    # 1. Update Header & Summary Metrics at the top
-    sheet.range("A1").value = title
-    sheet.range("A1").font.bold = True
-    sheet.range("A1").font.size = 14
-
-    underlying = metrics.get("underlying", "")
-    atm = metrics.get("atm", "")
-    pcr = round(metrics.get("pcr_overall", 0), 2)
-
-    sheet.range("A2").value = f"Underlying LTP: {underlying}"
-    if atm:
-        sheet.range("A3").value = f"ATM: {atm}   PCR: {pcr}"
-    else:
-        sheet.range("A3").value = ""
-
-    # 2. Filter out internal columns
     cols = [c for c in df.columns if not c.startswith("_")]
-    export_df = df[cols].copy()
-
-    # 3. Write Headers and Table values in one high-performance block
+    nrows = len(df)
     start_row = 5
-    headers_range = sheet.range((start_row, 1), (start_row, len(cols)))
-    headers_range.value = cols
-    headers_range.font.bold = True
-    headers_range.color = (220, 220, 220)
+    st_ = _layout.setdefault(sheet_name, {"cols": None, "nrows": None})
+    layout_changed = (st_["cols"] != cols or st_["nrows"] != nrows)
 
-    data_range = sheet.range((start_row + 1, 1), (start_row + len(export_df), len(cols)))
-    data_range.value = export_df.values
+    # live summary line — cheap, update every tick
+    sheet.range("A2").value = f"Underlying LTP: {metrics.get('underlying','')}"
+    atm = metrics.get("atm", "")
+    sheet.range("A3").value = (f"ATM: {atm}   PCR: {round(metrics.get('pcr_overall',0),2)}"
+                               if atm else "")
 
-    # 4. Apply Percentage format for Chg% columns
-    for j, c in enumerate(cols, start=1):
-        if "Chg%" in c:
-            pct_range = sheet.range((start_row + 1, j), (start_row + len(export_df), j))
-            pct_range.number_format = "0.00%"
+    if layout_changed:
+        # title + header + ALL values + formats written ONCE (not every tick)
+        sheet.range("A1").value = title
+        sheet.range("A1").font.bold = True
+        sheet.range((start_row, 1), (start_row + 2000, len(cols) + 2)).clear_contents()
+        hdr = sheet.range((start_row, 1), (start_row, len(cols)))
+        hdr.value = cols
+        hdr.font.bold = True
+        hdr.color = (220, 220, 220)
+        sheet.range((start_row + 1, 1), (start_row + nrows, len(cols))).value = df[cols].values
+        # apply % format ONCE to any Chg% column (setting a cell's value later keeps its format)
+        for j, c in enumerate(cols, start=1):
+            if "Chg%" in c:
+                sheet.range((start_row + 1, j), (start_row + nrows, j)).number_format = "0.00%"
+        st_.update(cols=list(cols), nrows=nrows)
+    else:
+        live = set(cols) if not live_cols else set(live_cols)
+        for j, c in enumerate(cols, start=1):
+            if c in live:        # write ONLY the live columns, values only
+                rng = sheet.range((start_row + 1, j), (start_row + nrows, j))
+                rng.value = [[v] for v in df[c].values]
 
-    # 5. Save workbook so disk file and live view are in sync
-    try:
-        sheet.book.save()
-    except Exception:
-        pass
-
+    _tick["n"] += 1
+    if _tick["n"] % save_every == 0:     # save to disk occasionally, not every tick
+        try: sheet.book.save()
+        except Exception: pass
     return True

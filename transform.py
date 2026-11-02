@@ -63,6 +63,67 @@ def build_chain_table(chain_json, strikes_around_atm=10):
     }
     return df, metrics
 
+# ---- Raw builder (all API fields, no derived columns) ----
+_RAW_FIELDS = [
+    ("last_price", "LTP"), ("previous_close_price", "PrevClose"),
+    ("oi", "OI"), ("previous_oi", "PrevOI"),
+    ("volume", "Volume"), ("previous_volume", "PrevVolume"),
+    ("average_price", "AvgPrice"), ("implied_volatility", "IV"),
+    ("top_bid_price", "BidPrice"), ("top_bid_quantity", "BidQty"),
+    ("top_ask_price", "AskPrice"), ("top_ask_quantity", "AskQty"),
+    ("security_id", "SecurityId"),
+]
+_GREEKS = [("delta","Delta"), ("theta","Theta"), ("gamma","Gamma"), ("vega","Vega")]
+
+def _raw_side(d, prefix):
+    out = {}
+    for api, name in _RAW_FIELDS:
+        out[f"{prefix} {name}"] = d.get(api, 0)
+    g = d.get("greeks", {}) or {}
+    for api, name in _GREEKS:
+        out[f"{prefix} {name}"] = g.get(api, 0.0)
+    return out
+
+def build_raw_chain_table(chain_json, strikes_around_atm=10):
+    """ALL raw API fields per strike, no derived columns. Mirrors build_chain_table's
+       ATM windowing so the two views line up."""
+    data = chain_json["data"]
+    underlying = data["last_price"]
+    oc = data["oc"]
+    pairs = sorted(((float(k), k) for k in oc.keys()), key=lambda p: p[0])
+    strikes = [p[0] for p in pairs]
+    atm = min(strikes, key=lambda s: abs(s - underlying))
+    atm_i = strikes.index(atm)
+    lo = max(0, atm_i - strikes_around_atm)
+    hi = min(len(pairs), atm_i + strikes_around_atm + 1)
+    rows, tot_ce_oi, tot_pe_oi = [], 0, 0
+    for s, key in pairs[lo:hi]:
+        ce = oc[key].get("ce", {}) or {}
+        pe = oc[key].get("pe", {}) or {}
+        tot_ce_oi += ce.get("oi", 0); tot_pe_oi += pe.get("oi", 0)
+        row = {}
+        row.update(_raw_side(ce, "CE"))
+        row["Strike"] = s
+        row.update(_raw_side(pe, "PE"))
+        rows.append(row)
+    df = pd.DataFrame(rows)
+    ce_cols = [c for c in df.columns if c.startswith("CE")]
+    pe_cols = [c for c in df.columns if c.startswith("PE")]
+    df = df[ce_cols + ["Strike"] + pe_cols]
+    metrics = {"underlying": underlying, "atm": atm,
+               "pcr_overall": (tot_pe_oi/tot_ce_oi if tot_ce_oi else 0.0),
+               "total_ce_oi": tot_ce_oi, "total_pe_oi": tot_pe_oi}
+    return df, metrics
+
+# --- static column lists so the Field/Live widgets can live OUTSIDE the fragment ---
+COMPUTED_COLUMNS = ["CE Buildup","CE Delta","CE Theta","CE IV","CE Volume","CE OI",
+                    "CE Chg%","CE LTP","Strike","PCR","PE LTP","PE Chg%","PE OI",
+                    "PE Volume","PE IV","PE Delta","PE Theta","PE Buildup"]
+_CE_NAMES = [f"CE {name}" for _, name in _RAW_FIELDS] + [f"CE {name}" for _, name in _GREEKS]
+_PE_NAMES = [f"PE {name}" for _, name in _RAW_FIELDS] + [f"PE {name}" for _, name in _GREEKS]
+RAW_COLUMNS = _CE_NAMES + ["Strike"] + _PE_NAMES   # the full 35-column raw layout
+
+
 def build_stock_table(quote_json, id_to_symbol):
     out = []
     seg = quote_json["data"].get("NSE_EQ", {})

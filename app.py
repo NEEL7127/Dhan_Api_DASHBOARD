@@ -49,13 +49,17 @@ if source == "Option Chain (NIFTY)":
         expiries = cached_expiries()
     except Exception as e:
         st.error(f"Can't load expiries — check Settings. ({e})"); st.stop()
+
+    # --- all selection widgets OUTSIDE the fragment ---
     expiry = st.sidebar.selectbox("Expiry", expiries)
     n = st.sidebar.slider("Strikes around ATM", 3, 25, 10)
+    view_mode = st.sidebar.radio("View", ["Computed", "Raw (all API fields)"])
+    is_raw = (view_mode == "Raw (all API fields)")
 
-    all_cols = ["CE Buildup","CE Delta","CE Theta","CE IV","CE Volume","CE OI",
-                "CE Chg%","CE LTP","Strike","PCR","PE LTP","PE Chg%","PE OI",
-                "PE Volume","PE IV","PE Delta","PE Theta","PE Buildup"]
-    chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
+    data_cols = transform.RAW_COLUMNS if is_raw else transform.COMPUTED_COLUMNS
+    chosen = st.sidebar.multiselect("Fields", data_cols, default=data_cols)
+    live_cols = st.sidebar.multiselect(
+        "🔴 Live-update columns (others stay frozen)", chosen, default=chosen)
     refresh = st.sidebar.checkbox("Auto-refresh (3s)", value=False)
     live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel (3s)", value=False)
     live_gsheets = st.sidebar.checkbox("🟢 Live Stream to Google Sheets (3s)", value=False)
@@ -64,48 +68,58 @@ if source == "Option Chain (NIFTY)":
     def render():
         try:
             chain = dhan_client.get_option_chain(expiry)
-            df, m = transform.build_chain_table(chain, n)
+            df, m = (transform.build_raw_chain_table(chain, n) if is_raw
+                     else transform.build_chain_table(chain, n))
         except Exception as e:
             st.error(f"Fetch failed: {e}"); return
+
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("NIFTY LTP", f"{m['underlying']:.2f}")
         c2.metric("ATM", f"{m['atm']:.0f}")
         c3.metric("PCR", f"{m['pcr_overall']:.2f}")
         c4.metric("CE / PE OI (lakh)",
                   f"{m['total_ce_oi']/1e5:,.0f} / {m['total_pe_oi']/1e5:,.0f}")
-        view = df[[c for c in chosen if c in df.columns]]
-        pct_cols = [c for c in view.columns if "Chg%" in c]
-        fmt = {c: "{:.2%}" for c in pct_cols}
-        st.dataframe(view.style.format(fmt, precision=2), use_container_width=True, height=600)
 
-        # Stream to open Excel if checked
+        view = df[[c for c in chosen if c in df.columns]]
+        if is_raw:
+            st.dataframe(view, use_container_width=True, height=600)          # raw: no styling
+        else:
+            pct = {c: "{:.2%}" for c in view.columns if "Chg%" in c}
+            st.dataframe(view.style.format(pct, precision=2),
+                         use_container_width=True, height=600)
+
         if live_stream:
             try:
-                live_excel.stream_to_excel(view, m, title=f"NIFTY Option Chain ({expiry})", sheet_name="Option Chain")
+                live_excel.stream_to_excel(view, m, live_cols=live_cols,
+                    title=f"NIFTY Option Chain ({expiry})", sheet_name="Option Chain")
                 st.sidebar.success("🟢 Excel Live Linked")
             except Exception as ex:
                 st.sidebar.warning(f"Excel Live Link note: {ex}")
 
-        # Stream to Google Sheets if checked
         if live_gsheets:
             try:
-                live_google_sheets.stream_to_google_sheet(view, m, title=f"NIFTY Option Chain ({expiry})", worksheet_name="Option Chain")
+                live_google_sheets.stream_to_google_sheet(view, m,
+                    title=f"NIFTY Option Chain ({expiry})", worksheet_name="Option Chain")
                 st.sidebar.success("🟢 Google Sheets Live Linked")
             except Exception as ex:
                 st.sidebar.warning(f"Google Sheets note: {ex}")
 
         col_dl1, col_dl2 = st.columns(2)
         with col_dl1:
-            st.download_button("⬇ Download Excel (.xlsx)",
-                data=excel_export.to_excel_bytes(view, m),
-                file_name=f"nifty_chain_{expiry}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            if is_raw:
+                st.download_button("⬇ Download RAW Excel (.xlsx)",
+                    data=excel_export.to_excel_raw_bytes(view),
+                    file_name=f"nifty_chain_raw_{expiry}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            else:
+                st.download_button("⬇ Download Excel (.xlsx)",
+                    data=excel_export.to_excel_bytes(view, m),
+                    file_name=f"nifty_chain_{expiry}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with col_dl2:
-            st.download_button("🌐 Download for Google Sheets (.csv)",
+            st.download_button("🌐 Download CSV (Google Sheets)",
                 data=view.to_csv(index=False).encode("utf-8"),
-                file_name=f"nifty_chain_{expiry}_gsheets.csv",
-                mime="text/csv",
-                help="Download formatted CSV to import directly into Google Sheets (File > Import)")
+                file_name=f"nifty_chain_{expiry}.csv", mime="text/csv")
     render()
 
 else:  # source == "Nifty 50 Stocks"
@@ -117,8 +131,10 @@ else:  # source == "Nifty 50 Stocks"
     except Exception as e:
         st.error(f"Could not load Nifty 50 list / ids: {e}"); st.stop()
 
-    all_cols = ["Symbol", "LTP", "Chg%", "Open", "High", "Low", "Volume"]
-    chosen = st.sidebar.multiselect("Fields", all_cols, default=all_cols)
+    stock_cols = ["Symbol", "LTP", "Chg%", "Open", "High", "Low", "Volume"]
+    chosen = st.sidebar.multiselect("Fields", stock_cols, default=stock_cols)
+    live_cols = st.sidebar.multiselect(
+        "🔴 Live-update columns (others stay frozen)", chosen, default=chosen)
     refresh = st.sidebar.checkbox("Auto-refresh (3s)", value=False)
     live_stream = st.sidebar.checkbox("🔴 Live Stream to Excel (3s)", value=False)
     live_gsheets = st.sidebar.checkbox("🟢 Live Stream to Google Sheets (3s)", value=False)
@@ -137,35 +153,25 @@ else:  # source == "Nifty 50 Stocks"
         pct = {c: "{:.2%}" for c in view.columns if c == "Chg%"}
         st.dataframe(view.style.format(pct, precision=2),
                      use_container_width=True, height=600)
-
-        # Stream to open Excel if checked
         if live_stream:
             try:
-                live_excel.stream_to_excel(view, {"underlying": "Nifty 50 Stocks"}, title="Nifty 50 Live Stocks", sheet_name="Nifty 50 Stocks")
+                live_excel.stream_to_excel(view, {"underlying": "Nifty 50 Stocks"},
+                    live_cols=live_cols, title="Nifty 50 Live Stocks",
+                    sheet_name="Nifty 50 Stocks")
                 st.sidebar.success("🟢 Excel Live Linked")
             except Exception as ex:
                 st.sidebar.warning(f"Excel Live Link note: {ex}")
-
-        # Stream to Google Sheets if checked
         if live_gsheets:
             try:
-                live_google_sheets.stream_to_google_sheet(view, {"underlying": "Nifty 50 Stocks"}, title="Nifty 50 Live Stocks", worksheet_name="Nifty 50 Stocks")
+                live_google_sheets.stream_to_google_sheet(view,
+                    {"underlying": "Nifty 50 Stocks"}, title="Nifty 50 Live Stocks",
+                    worksheet_name="Nifty 50 Stocks")
                 st.sidebar.success("🟢 Google Sheets Live Linked")
             except Exception as ex:
                 st.sidebar.warning(f"Google Sheets note: {ex}")
-
-        col_dl1, col_dl2 = st.columns(2)
-        with col_dl1:
-            st.download_button("⬇ Download Excel (.xlsx)",
-                data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
-                                                 title="Nifty 50 Stocks"),
-                file_name="nifty50_stocks.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        with col_dl2:
-            st.download_button("🌐 Download for Google Sheets (.csv)",
-                data=view.to_csv(index=False).encode("utf-8"),
-                file_name="nifty50_stocks_gsheets.csv",
-                mime="text/csv",
-                help="Download formatted CSV to import directly into Google Sheets (File > Import)")
+        st.download_button("⬇ Download Excel (.xlsx)",
+            data=excel_export.to_excel_bytes(view, {"underlying": "Nifty 50 Stocks"},
+                                             title="Nifty 50 Stocks"),
+            file_name="nifty50_stocks.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     render_stocks()
-
