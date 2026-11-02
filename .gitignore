@@ -3,4 +3,6 @@ dhan_secrets.json
 .venv/
 __pycache__/
 *.xlsx
+!OptionChain.xlsx
+!Live_Nifty_Tracker.xlsx
 nifty50_ids.json

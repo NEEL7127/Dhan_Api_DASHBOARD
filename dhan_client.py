@@ -20,16 +20,22 @@ def _headers():
         "Accept": "application/json",
     }
 
-def _post(path, body, throttle=True):
-    if throttle:
-        _throttle()
-    r = requests.post(f"{BASE_URL}{path}", json=body, headers=_headers(), timeout=20)
-    if r.status_code != 200:
-        raise RuntimeError(f"Dhan {path} HTTP {r.status_code}: {r.text[:300]}")
-    data = r.json()
-    if data.get("status") not in (None, "success"):
-        raise RuntimeError(f"Dhan {path} status={data.get('status')}: {str(data)[:300]}")
-    return data
+def _post(path, body, throttle=True, retries=5):
+    for attempt in range(retries + 1):
+        if throttle:
+            _throttle(min_gap=3.5)
+        r = requests.post(f"{BASE_URL}{path}", json=body, headers=_headers(), timeout=20)
+        if r.status_code == 429 or (r.status_code == 200 and "Too many requests" in r.text):
+            if attempt < retries:
+                time.sleep(4.0)
+                continue
+            raise RuntimeError(f"Dhan {path}: Rate limit (429). Retrying on next cycle.")
+        if r.status_code != 200:
+            raise RuntimeError(f"Dhan {path} HTTP {r.status_code}: {r.text[:300]}")
+        data = r.json()
+        if data.get("status") not in (None, "success"):
+            raise RuntimeError(f"Dhan {path} status={data.get('status')}: {str(data)[:300]}")
+        return data
 
 def get_expiries():
     body = {"UnderlyingScrip": NIFTY_SCRIP, "UnderlyingSeg": NIFTY_SEG}
